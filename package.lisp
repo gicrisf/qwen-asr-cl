@@ -26,4 +26,7 @@
    #:load-tokenizer
    #:tokenizer-encode
    #:tokenizer-decode
-   #:tokenizer-vocab-size))
+   #:tokenizer-vocab-size
+   ;; audio
+   #:load-wav
+   #:mel-spectrogram))
