@@ -40,4 +40,15 @@
    #:encoder-ffn-dim
    #:encoder-output-dim
    #:encoder-chunk-size
-   #:encoder-n-window-infer))
+   #:encoder-n-window-infer
+   ;; decoder
+   #:load-decoder
+   #:decoder-embed
+   #:decoder-prefill
+   #:decoder-step
+   #:make-decoder-state
+   #:decoder-state-cur-len
+   #:decoder-hidden
+   #:decoder-n-layers
+   ;; core
+   #:transcribe))

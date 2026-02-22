@@ -101,6 +101,53 @@ First half of each row = sin, second half = cos (matches C qwen_sinusoidal_pe)."
   "y = x [seq,in] @ W[out,in]^T.  Returns fresh flat array."
   (linear x seq-len in-dim w out-dim nil))
 
+;;; ─── RMSNorm ─────────────────────────────────────────────────────────────
+
+(defun rms-norm! (out x weight seq-len hidden &optional (eps 1.0f-6))
+  "Per-row RMSNorm (no mean subtraction). OUT may alias X (reads full row before
+writing). Returns OUT.
+  rms = sqrt(mean(x²) + eps)
+  out[s,i] = x[s,i] / rms * weight[i]"
+  (dotimes (s seq-len out)
+    (let* ((base   (* s hidden))
+           (sum-sq 0.0f0))
+      (dotimes (i hidden)
+        (let ((v (aref x (+ base i))))
+          (incf sum-sq (* v v))))
+      (let ((rms-inv (/ 1.0f0 (sqrt (+ (/ sum-sq (float hidden 1.0f0)) eps)))))
+        (dotimes (i hidden)
+          (setf (aref out (+ base i))
+                (* (aref x (+ base i)) rms-inv (aref weight i))))))))
+
+(defun rms-norm-per-head! (x weight seq-len n-heads head-dim &optional (eps 1.0f-6))
+  "RMSNorm each head segment of X in-place. X is flat [seq * n-heads * head-dim].
+WEIGHT is flat [head-dim], shared across all heads. Returns X."
+  (let ((hidden (* n-heads head-dim)))
+    (dotimes (s seq-len x)
+      (dotimes (h n-heads)
+        (let* ((base   (+ (* s hidden) (* h head-dim)))
+               (sum-sq 0.0f0))
+          (dotimes (d head-dim)
+            (let ((v (aref x (+ base d))))
+              (incf sum-sq (* v v))))
+          (let ((rms-inv (/ 1.0f0 (sqrt (+ (/ sum-sq (float head-dim 1.0f0)) eps)))))
+            (dotimes (d head-dim)
+              (setf (aref x (+ base d))
+                    (* (aref x (+ base d)) rms-inv (aref weight d))))))))))
+
+;;; ─── SiLU ────────────────────────────────────────────────────────────────
+
+(defun silu! (x n)
+  "SiLU in-place: x[i] = x[i] * sigmoid(x[i]). Numerically stable. Returns X.
+Two-branch form ensures exp() is only ever called with non-positive arguments,
+preventing single-float overflow for large negative inputs (e.g. v < -88)."
+  (dotimes (i n x)
+    (let ((v (aref x i)))
+      (setf (aref x i)
+            (if (>= v 0.0f0)
+                (/ v (+ 1.0f0 (exp (- v))))       ; exp(-v) in (0,1], safe
+                (* v (/ (exp v) (+ 1.0f0 (exp v)))))))))  ; exp(v) in (0,1), safe
+
 ;;; ─── 2D Convolution (im2col + BLAS GEMM) ────────────────────────────────
 
 (defun %im2col (in cols c-in h-in w-in kh kw stride padding h-out w-out)
