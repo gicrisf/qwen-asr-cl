@@ -48,6 +48,14 @@
         (error "encoder: weight not found: ~a" name))
       (tensor-f32 sf tensor))))
 
+(defun %enc-tensor-2d (ms prefix key)
+  "Load rank-2 tensor (PREFIX ++ KEY) as a simple 2D f32 array."
+  (let ((name (concatenate 'string prefix key)))
+    (multiple-value-bind (sf tensor) (find-tensor ms name)
+      (unless tensor
+        (error "encoder: weight not found: ~a" name))
+      (tensor-f32-2d sf tensor))))
+
 (defun load-encoder (model-dir)
   "Load encoder weights from MODEL-DIR.  Returns an ENCODER struct.
 Variant is auto-detected: 1.7B has 24 layers, 0.6B has 18."
@@ -71,26 +79,26 @@ Variant is auto-detected: 1.7B has 24 layers, 0.6B has 18."
           (conv2-b   (%enc-tensor ms pfx "conv2d2.bias"))
           (conv3-w   (%enc-tensor ms pfx "conv2d3.weight"))
           (conv3-b   (%enc-tensor ms pfx "conv2d3.bias"))
-          (conv-out-w (%enc-tensor ms pfx "conv_out.weight")))
+          (conv-out-w (%enc-tensor-2d ms pfx "conv_out.weight")))
       ;; Transformer layers
       (let ((layers (make-array n-layers)))
         (dotimes (i n-layers)
           (let ((lp (format nil "~alayers.~d." pfx i)))
             (setf (aref layers i)
                   (make-enc-layer
-                   :wq             (%enc-tensor ms lp "self_attn.q_proj.weight")
+                   :wq             (%enc-tensor-2d ms lp "self_attn.q_proj.weight")
                    :wq-bias        (%enc-tensor ms lp "self_attn.q_proj.bias")
-                   :wk             (%enc-tensor ms lp "self_attn.k_proj.weight")
+                   :wk             (%enc-tensor-2d ms lp "self_attn.k_proj.weight")
                    :wk-bias        (%enc-tensor ms lp "self_attn.k_proj.bias")
-                   :wv             (%enc-tensor ms lp "self_attn.v_proj.weight")
+                   :wv             (%enc-tensor-2d ms lp "self_attn.v_proj.weight")
                    :wv-bias        (%enc-tensor ms lp "self_attn.v_proj.bias")
-                   :wo             (%enc-tensor ms lp "self_attn.out_proj.weight")
+                   :wo             (%enc-tensor-2d ms lp "self_attn.out_proj.weight")
                    :wo-bias        (%enc-tensor ms lp "self_attn.out_proj.bias")
                    :attn-norm      (%enc-tensor ms lp "self_attn_layer_norm.weight")
                    :attn-norm-bias (%enc-tensor ms lp "self_attn_layer_norm.bias")
-                   :fc1            (%enc-tensor ms lp "fc1.weight")
+                   :fc1            (%enc-tensor-2d ms lp "fc1.weight")
                    :fc1-bias       (%enc-tensor ms lp "fc1.bias")
-                   :fc2            (%enc-tensor ms lp "fc2.weight")
+                   :fc2            (%enc-tensor-2d ms lp "fc2.weight")
                    :fc2-bias       (%enc-tensor ms lp "fc2.bias")
                    :ffn-norm       (%enc-tensor ms lp "final_layer_norm.weight")
                    :ffn-norm-bias  (%enc-tensor ms lp "final_layer_norm.bias")))))
@@ -103,9 +111,9 @@ Variant is auto-detected: 1.7B has 24 layers, 0.6B has 18."
          :n-layers    n-layers
          :ln-post-w   (%enc-tensor ms pfx "ln_post.weight")
          :ln-post-b   (%enc-tensor ms pfx "ln_post.bias")
-         :proj1-w     (%enc-tensor ms pfx "proj1.weight")
+         :proj1-w     (%enc-tensor-2d ms pfx "proj1.weight")
          :proj1-b     (%enc-tensor ms pfx "proj1.bias")
-         :proj2-w     (%enc-tensor ms pfx "proj2.weight")
+         :proj2-w     (%enc-tensor-2d ms pfx "proj2.weight")
          :proj2-b     (%enc-tensor ms pfx "proj2.bias")
          :d-model     d-model  :ffn-dim    ffn-dim
          :n-heads     n-heads  :head-dim   head-dim

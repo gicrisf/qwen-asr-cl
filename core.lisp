@@ -55,14 +55,20 @@ Returns the ASR text as a string."
              (input-embeds (make-array (* total-seq hidden)
                                        :element-type 'single-float))
              (embed-tokens (decoder-embed-tokens dec))
+             (embed-2d?   (= (array-rank embed-tokens) 2))
              (off          0))
         ;; Embed prefix tokens
         (dotimes (i n-prefix)
-          (let ((src (* (aref +prompt-prefix+ i) hidden))
+          (let ((tok (aref +prompt-prefix+ i))
                 (dst (* off hidden)))
-            (dotimes (d hidden)
-              (setf (aref input-embeds (+ dst d))
-                    (aref embed-tokens (+ src d)))))
+            (if embed-2d?
+                (dotimes (d hidden)
+                  (setf (aref input-embeds (+ dst d))
+                        (aref embed-tokens tok d)))
+                (let ((src (* tok hidden)))
+                  (dotimes (d hidden)
+                    (setf (aref input-embeds (+ dst d))
+                          (aref embed-tokens (+ src d)))))))
           (incf off))
         ;; Copy encoder output directly (enc_dim == dec_hidden)
         (let ((enc-base (* off hidden)))
@@ -72,11 +78,16 @@ Returns the ASR text as a string."
         (incf off n-enc-tokens)
         ;; Embed suffix tokens
         (dotimes (i n-suffix)
-          (let ((src (* (aref +prompt-suffix+ i) hidden))
+          (let ((tok (aref +prompt-suffix+ i))
                 (dst (* off hidden)))
-            (dotimes (d hidden)
-              (setf (aref input-embeds (+ dst d))
-                    (aref embed-tokens (+ src d)))))
+            (if embed-2d?
+                (dotimes (d hidden)
+                  (setf (aref input-embeds (+ dst d))
+                        (aref embed-tokens tok d)))
+                (let ((src (* tok hidden)))
+                  (dotimes (d hidden)
+                    (setf (aref input-embeds (+ dst d))
+                          (aref embed-tokens (+ src d)))))))
           (incf off))
 
         ;; ── Step 4: Init decoder state ────────────────────────────────────
@@ -93,7 +104,9 @@ Returns the ASR text as a string."
                 (setf (aref last-embed d)
                       (aref input-embeds (+ last-base d)))))
 
-            (let ((token          (decoder-step dec state last-embed))
+            (let* ((last-token-id (aref +prompt-suffix+
+                                        (1- (length +prompt-suffix+))))
+                   (token          (decoder-step dec state last-embed last-token-id))
                   (result         (make-array 0
                                               :element-type 'character
                                               :adjustable t
@@ -117,7 +130,7 @@ Returns the ASR text as a string."
                        (vector-push-extend c result)))))
                 ;; Embed generated token and run next step
                 (let ((embed (decoder-embed dec token)))
-                  (setf token (decoder-step dec state embed))))
+                  (setf token (decoder-step dec state embed token))))
 
               ;; ── Step 8: Return accumulated text ────────────────────────
               (coerce result 'string))))))))

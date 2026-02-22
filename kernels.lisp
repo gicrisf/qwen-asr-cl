@@ -80,14 +80,21 @@ First half of each row = sin, second half = cos (matches C qwen_sinusoidal_pe)."
 ;;; The result 2D array is kept alive by the returned 1D displaced view.
 
 (defun linear (x seq-len in-dim w out-dim b)
-  "y = x [seq,in] @ W[out,in]^T + b.  Returns fresh flat [seq*out] array."
+  "y = x [seq,in] @ W[out,in]^T + b. Returns fresh flat [seq*out] array.
+If W is a simple rank-2 array, pass it directly to BLAS to avoid a copy."
   (let* ((y-2d (make-array (list seq-len out-dim) :element-type 'single-float))
          (y    (make-array (* seq-len out-dim)
                            :element-type 'single-float
-                           :displaced-to y-2d)))
+                           :displaced-to y-2d))
+         (x2d  (if (= (array-rank x) 2)
+                   x
+                   (as-matrix x seq-len in-dim)))
+         (w2d  (if (= (array-rank w) 2)
+                   w
+                   (as-matrix w out-dim in-dim))))
     (lla:gemm! 1.0f0
-               (as-matrix x seq-len in-dim)
-               (as-matrix w out-dim  in-dim)
+               x2d
+               w2d
                0.0f0 y-2d
                :transpose-b? t)
     (when b

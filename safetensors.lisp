@@ -184,3 +184,27 @@
        (loop for i below n
              do (setf (aref out i) (bf16->f32 (read-le-u16 data (+ base (* i 2))))))))
     out))
+
+(defun tensor-f32-2d (sf tensor)
+  "Return tensor data as a (simple-array single-float (rows cols)).
+Tensor must be rank-2. Allocates fresh storage. Supports :f32 and :bf16."
+  (let* ((shape (safetensor-shape tensor)))
+    (unless (= (length shape) 2)
+      (error "tensor-f32-2d: expected rank-2 tensor, got shape ~a" shape))
+    (let* ((rows (aref shape 0))
+           (cols (aref shape 1))
+           (out  (make-array (list rows cols) :element-type 'single-float))
+           (data (safetensors-file-bytes sf))
+           (base (+ (safetensors-file-data-start sf)
+                    (safetensor-offset tensor)))
+           (n    (* rows cols)))
+      (ecase (safetensor-dtype tensor)
+        (:f32
+         (loop for i below n
+               do (setf (row-major-aref out i)
+                        (u32->f32 (read-le-u32 data (+ base (* i 4)))))))
+        (:bf16
+         (loop for i below n
+               do (setf (row-major-aref out i)
+                        (bf16->f32 (read-le-u16 data (+ base (* i 2))))))))
+      out)))

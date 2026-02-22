@@ -68,6 +68,14 @@
         (error "decoder: weight not found: ~a" name))
       (tensor-f32 sf tensor))))
 
+(defun %dec-tensor-2d (ms prefix key)
+  "Load rank-2 tensor (PREFIX ++ KEY) as a simple 2D f32 array."
+  (let ((name (concatenate 'string prefix key)))
+    (multiple-value-bind (sf tensor) (find-tensor ms name)
+      (unless tensor
+        (error "decoder: weight not found: ~a" name))
+      (tensor-f32-2d sf tensor))))
+
 (defun load-decoder (model-dir)
   "Load decoder weights from MODEL-DIR. Returns a DECODER struct.
 Variant auto-detected: hidden=1024 → 0.6B, hidden=2048 → 1.7B."
@@ -87,23 +95,23 @@ Variant auto-detected: hidden=1024 → 0.6B, hidden=2048 → 1.7B."
          (vocab-size  151936)
          (rms-eps     1.0f-6)
          (rope-theta  1.0f6))
-    (let ((embed-tokens (%dec-tensor ms pfx "embed_tokens.weight"))
+    (let ((embed-tokens (%dec-tensor-2d ms pfx "embed_tokens.weight"))
           (layers (make-array n-layers)))
       (dotimes (i n-layers)
         (let ((lp (format nil "~alayers.~d." pfx i)))
           (setf (aref layers i)
                 (make-dec-layer
-                 :wq             (%dec-tensor ms lp "self_attn.q_proj.weight")
-                 :wk             (%dec-tensor ms lp "self_attn.k_proj.weight")
-                 :wv             (%dec-tensor ms lp "self_attn.v_proj.weight")
-                 :wo             (%dec-tensor ms lp "self_attn.o_proj.weight")
+                 :wq             (%dec-tensor-2d ms lp "self_attn.q_proj.weight")
+                 :wk             (%dec-tensor-2d ms lp "self_attn.k_proj.weight")
+                 :wv             (%dec-tensor-2d ms lp "self_attn.v_proj.weight")
+                 :wo             (%dec-tensor-2d ms lp "self_attn.o_proj.weight")
                  :q-norm         (%dec-tensor ms lp "self_attn.q_norm.weight")
                  :k-norm         (%dec-tensor ms lp "self_attn.k_norm.weight")
                  :input-norm     (%dec-tensor ms lp "input_layernorm.weight")
                  :post-attn-norm (%dec-tensor ms lp "post_attention_layernorm.weight")
-                 :gate-w         (%dec-tensor ms lp "mlp.gate_proj.weight")
-                 :up-w           (%dec-tensor ms lp "mlp.up_proj.weight")
-                 :down-w         (%dec-tensor ms lp "mlp.down_proj.weight")))))
+                 :gate-w         (%dec-tensor-2d ms lp "mlp.gate_proj.weight")
+                 :up-w           (%dec-tensor-2d ms lp "mlp.up_proj.weight")
+                 :down-w         (%dec-tensor-2d ms lp "mlp.down_proj.weight")))))
       (make-decoder
        :embed-tokens embed-tokens
        :layers       layers
@@ -399,18 +407,21 @@ hidden-state X (flat [seq-len * hidden])."
 (defun decoder-embed (dec token-id)
   "Return a fresh flat [hidden] array with the embedding for TOKEN-ID."
   (let* ((hidden (decoder-hidden dec))
-         (base   (* token-id hidden))
+         (table  (decoder-embed-tokens dec))
          (embed  (make-array hidden :element-type 'single-float)))
-    (dotimes (d hidden embed)
-      (setf (aref embed d)
-            (aref (decoder-embed-tokens dec) (+ base d))))))
+    (if (= (array-rank table) 2)
+        (dotimes (d hidden embed)
+          (setf (aref embed d) (aref table token-id d)))
+        (let ((base (* token-id hidden)))
+          (dotimes (d hidden embed)
+            (setf (aref embed d) (aref table (+ base d))))))))
 
 (defun decoder-prefill (dec state input-embeds seq-len)
   "Run all layers for SEQ-LEN tokens starting at state.cur-len. Updates KV cache.
 INPUT-EMBEDS is flat [seq-len * hidden]. Returns x (flat [seq-len * hidden])."
   (%decoder-forward! dec state input-embeds seq-len))
 
-(defun decoder-step (dec state embed)
+(defun decoder-step (dec state embed &optional token-id)
   "Run one autoregressive step for a single token. EMBED is flat [hidden].
 Updates KV cache and increments state.cur-len. Returns greedy token ID."
   (let* ((hidden (decoder-hidden dec))
