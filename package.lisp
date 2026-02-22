@@ -21,4 +21,9 @@
    #:safetensors-file-path
    #:safetensors-file-tensors
    ;; multi-safetensors accessors
-   #:multi-safetensors-shards))
+   #:multi-safetensors-shards
+   ;; tokenizer
+   #:load-tokenizer
+   #:tokenizer-encode
+   #:tokenizer-decode
+   #:tokenizer-vocab-size))
