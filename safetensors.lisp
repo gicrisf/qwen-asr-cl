@@ -149,7 +149,7 @@
   (dolist (shard (multi-safetensors-shards ms))
     (let ((tensor (gethash name (safetensors-file-tensors shard))))
       (when tensor
-        (return (values shard tensor)))))
+        (return-from find-tensor (values shard tensor)))))
   (values nil nil))
 
 ;;; ─────────────────────────────────────────────────────────────────────

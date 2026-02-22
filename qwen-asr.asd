@@ -14,6 +14,7 @@
                (:file "safetensors")
                (:file "tokenizer")
                (:file "audio")
+               (:file "kernels")
                (:file "encoder")
                (:file "decoder")
                (:file "core")))

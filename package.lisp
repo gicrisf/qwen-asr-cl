@@ -29,4 +29,15 @@
    #:tokenizer-vocab-size
    ;; audio
    #:load-wav
-   #:mel-spectrogram))
+   #:mel-spectrogram
+   ;; encoder
+   #:load-encoder
+   #:encoder-forward
+   #:encoder-n-layers
+   #:encoder-d-model
+   #:encoder-n-heads
+   #:encoder-head-dim
+   #:encoder-ffn-dim
+   #:encoder-output-dim
+   #:encoder-chunk-size
+   #:encoder-n-window-infer))
